@@ -2,7 +2,7 @@ import asyncio
 import json
 from dotenv import load_dotenv
 import pandas as pd
-from playwright.async_api import async_playwright
+# from playwright.async_api import async_playwright
 from urllib.parse import urlparse
 import streamlit as st
 from bs4 import BeautifulSoup
@@ -66,10 +66,10 @@ def format_llm_response(response: str) -> str:
     text = text.strip() + '\n' + '='*60 + '\n'
     return text
 
-def evaluate_heuristic_with_llm(prompt: str, page_content: str) -> str:
+def evaluate_heuristic_with_llm(prompt: str) -> str:
     """Evaluate heuristics using OpenAI's API"""
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-    full_prompt = f"{prompt}\n\nPage Content:\n{page_content}"
+    full_prompt = f"{prompt}"
     
     try:
         response = client.chat.completions.create(
@@ -602,63 +602,65 @@ def generate_conclusion_content(analysis_json: dict, average_score: float, max_s
     conclusion_content += "</p>"
     return conclusion_content
 
-async def login_and_crawl_all_pages(url: str, username: str, password: str, login_url: str, username_selector: str, password_selector: str, submit_selector: str):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
-        page = await context.new_page()
+# async def login_and_crawl_all_pages(url: str, username: str, password: str, login_url: str, username_selector: str, password_selector: str, submit_selector: str):
+#     async with async_playwright() as p:
+#         browser = await p.chromium.launch(headless=True)
+#         context = await browser.new_context()
+#         page = await context.new_page()
 
-        visited_urls = set()
-        url_to_content = {}
+#         visited_urls = set()
+#         url_to_content = {}
 
-        await page.goto(login_url)
-        await page.fill(username_selector, username)
-        await page.fill(password_selector, password)
-        await page.click(submit_selector)
-        await page.wait_for_load_state("networkidle")
+#         await page.goto(login_url)
+#         await page.fill(username_selector, username)
+#         await page.fill(password_selector, password)
+#         await page.click(submit_selector)
+#         await page.wait_for_load_state("networkidle")
 
-        async def crawl(current_url):
-            if current_url in visited_urls:
-                return
-            visited_urls.add(current_url)
-            await page.goto(current_url)
-            await page.wait_for_load_state("networkidle")
+#         async def crawl(current_url):
+#             if current_url in visited_urls:
+#                 return
+#             visited_urls.add(current_url)
+#             await page.goto(current_url)
+#             await page.wait_for_load_state("networkidle")
 
-            content = await page.content()
-            cleaned_content = clean_html_content(content)
-            url_to_content[current_url] = cleaned_content
-            print(f"Crawled {current_url} with cleaned content length {len(cleaned_content)}")
+#             content = await page.content()
+#             cleaned_content = clean_html_content(content)
+#             url_to_content[current_url] = cleaned_content
+#             print(f"Crawled {current_url} with cleaned content length {len(cleaned_content)}")
 
-            links = await page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
-            base_domain = urlparse(login_url).netloc
-            for link in links:
-                link_domain = urlparse(link).netloc
-                if link_domain == base_domain and not link.startswith(("mailto:", "javascript:")):
-                    await crawl(link)
+#             links = await page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
+#             base_domain = urlparse(login_url).netloc
+#             for link in links:
+#                 link_domain = urlparse(link).netloc
+#                 if link_domain == base_domain and not link.startswith(("mailto:", "javascript:")):
+#                     await crawl(link)
 
-        await crawl(url)
-        await browser.close()
-        return url_to_content
+#         await crawl(url)
+#         await browser.close()
+#         return url_to_content
 
 def run_crawl_and_evaluate_stream(start_url, username, password, login_url, username_selector, password_selector, submit_selector, prompt_map):
-    results = asyncio.run(
-        login_and_crawl_all_pages(
-            url=start_url, username=username, password=password, login_url=login_url,
-            username_selector=username_selector, password_selector=password_selector, submit_selector=submit_selector,
-        )
-    )
+    # results = asyncio.run(
+    #     login_and_crawl_all_pages(
+    #         url=start_url, username=username, password=password, login_url=login_url,
+    #         username_selector=username_selector, password_selector=password_selector, submit_selector=submit_selector,
+    #     )
+    # )
+
+    results =[]
 
     evaluations = {}
     placeholder = st.empty()
 
-    for url, content in results.items():
-        for heuristic, prompt in prompt_map.items():
-            prompt_with_url = prompt.replace("[Enter Website URL Here]", login_url)
-            result = evaluate_heuristic_with_llm(prompt_with_url, content)
-            if heuristic not in evaluations:
-                evaluations[heuristic] = {}
-                evaluations[heuristic][url] = {"output": result}
-                placeholder.json(evaluations)
+    # for url, content in results.items():
+    for heuristic, prompt in prompt_map.items():
+        prompt_with_url = prompt.replace("[Enter Website URL Here]", login_url)
+        result = evaluate_heuristic_with_llm(prompt_with_url)
+        if heuristic not in evaluations:
+            evaluations[heuristic] = {}
+            evaluations[heuristic][start_url] = {"output": result}
+            placeholder.json(evaluations)
     
     placeholder.empty()
     return evaluations
